@@ -32,13 +32,13 @@ func NewSentryHandler(
 }
 
 // Enabled reports whether the handler handles records at the given level.
-func (s SentryHandler) Enabled(ctx context.Context, level slog.Level) bool {
+func (s *SentryHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return s.Handler.Enabled(ctx, level)
 }
 
 // Handle intercepts and processes logger messages.
 // In our case, send a message to the Sentry.
-func (s SentryHandler) Handle(ctx context.Context, record slog.Record) error {
+func (s *SentryHandler) Handle(ctx context.Context, record slog.Record) error {
 	const (
 		shortErrKey = "err"
 		longErrKey  = "error"
@@ -53,6 +53,7 @@ func (s SentryHandler) Handle(ctx context.Context, record slog.Record) error {
 						sentry.CaptureException(err)
 					}
 				}
+
 				return true
 			})
 		case slog.LevelDebug, slog.LevelInfo, slog.LevelWarn:
@@ -64,11 +65,11 @@ func (s SentryHandler) Handle(ctx context.Context, record slog.Record) error {
 }
 
 // WithAttrs returns a new SentryHandler whose attributes consists.
-func (s SentryHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+func (s *SentryHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return NewSentryHandler(s.Handler.WithAttrs(attrs), s.levels)
 }
 
 // WithGroup returns a new SentryHandler whose group consists.
-func (s SentryHandler) WithGroup(name string) slog.Handler {
+func (s *SentryHandler) WithGroup(name string) slog.Handler {
 	return NewSentryHandler(s.Handler.WithGroup(name), s.levels)
 }

@@ -26,7 +26,7 @@ func main() {
 	if err := sentry.Init(sentry.ClientOptions{
 		Dsn: "myDSN",
 	}); err != nil {
-		slog.Error("init sentry", err)
+		slog.Error("init sentry", "err", err)
 	}
 
 	defer sentry.Flush(time.Second * 2)

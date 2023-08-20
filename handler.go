@@ -8,11 +8,6 @@ import (
 	"github.com/getsentry/sentry-go"
 )
 
-// SentryHandlerOpts represent Sentry hooks options.
-type SentryHandlerOpts struct {
-	Opts slog.HandlerOptions
-}
-
 // SentryHandler is a Handler that writes log records to the Sentry.
 type SentryHandler struct {
 	slog.Handler

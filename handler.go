@@ -2,11 +2,41 @@ package slogsentry
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"slices"
 
 	"github.com/getsentry/sentry-go"
 )
+
+const (
+	shortErrKey = "err"
+	longErrKey  = "error"
+)
+
+var slogDefaultKeys = []string{slog.TimeKey, slog.LevelKey, slog.SourceKey, slog.MessageKey, shortErrKey, longErrKey}
+
+// SlogEror contains both the slog msg and the actual error.
+type SlogError struct {
+	msg string
+	err error
+}
+
+// Error appends both the msg and err from the SlogError.
+func (e SlogError) Error() string {
+	msg := e.msg
+	if e.err != nil {
+		if len(msg) > 0 {
+			msg += ": "
+		}
+		msg += e.err.Error()
+	}
+	return msg
+}
+
+func (e SlogError) Unwrap() error {
+	return e.err
+}
 
 // SentryHandler is a Handler that writes log records to the Sentry.
 type SentryHandler struct {
@@ -34,26 +64,38 @@ func (s *SentryHandler) Enabled(ctx context.Context, level slog.Level) bool {
 // Handle intercepts and processes logger messages.
 // In our case, send a message to the Sentry.
 func (s *SentryHandler) Handle(ctx context.Context, record slog.Record) error {
-	const (
-		shortErrKey = "err"
-		longErrKey  = "error"
-	)
-
 	if slices.Contains(s.levels, record.Level) {
-		switch record.Level {
-		case slog.LevelError:
-			record.Attrs(func(attr slog.Attr) bool {
-				if attr.Key == shortErrKey || attr.Key == longErrKey {
-					if err, ok := attr.Value.Any().(error); ok {
-						sentry.CaptureException(err)
-					}
-				}
-
-				return true
-			})
-		case slog.LevelDebug, slog.LevelInfo, slog.LevelWarn:
-			sentry.CaptureMessage(record.Message)
+		hub := sentry.GetHubFromContext(ctx)
+		if hub == nil {
+			hub = sentry.CurrentHub()
 		}
+		if hub == nil {
+			return fmt.Errorf("sentry: hub is nil")
+		}
+		var err error
+		slogContext := map[string]any{}
+		record.Attrs(func(attr slog.Attr) bool {
+			if !slices.Contains(slogDefaultKeys, attr.Key) {
+				slogContext[attr.Key] = attr.Value.String()
+			} else if attr.Key == shortErrKey || attr.Key == longErrKey {
+				err = attr.Value.Any().(error)
+			}
+			return true
+		})
+
+		hub.WithScope(func(scope *sentry.Scope) {
+			if len(slogContext) > 0 {
+				scope.SetContext("slog", slogContext)
+			}
+
+			switch record.Level {
+			case slog.LevelError:
+				sentry.CaptureException(SlogError{msg: record.Message, err: err})
+			case slog.LevelDebug, slog.LevelInfo, slog.LevelWarn:
+				sentry.CaptureMessage(record.Message)
+
+			}
+		})
 	}
 
 	return s.Handler.Handle(ctx, record)
